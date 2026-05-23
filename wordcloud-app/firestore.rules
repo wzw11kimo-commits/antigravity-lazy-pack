@@ -1,9 +1,0 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // 允許任何人讀寫文字雲資料集 wordcloud_inputs
-    match /wordcloud_inputs/{document} {
-      allow read, write: if true;
-    }
-  }
-}
