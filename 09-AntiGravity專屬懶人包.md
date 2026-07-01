@@ -1,390 +1,167 @@
-﻿# Anti-Gravity 懶人包 #09：服務連接與工作流程設定
+# Anti-Gravity 懶人包 #09：服務連接與工作流程設定
 
-> 版本：v1.4
-> 更新日期：2026-05-31
+> 版本：v1.5 (實戰優化版)
+> 更新日期：2026-07-02
 > 語系偏好：繁體中文（Taiwan）
 
-這份懶人包的目標，是讓 Anti-Gravity 使用者能安全連接 NotebookLM、Firebase、GitHub、Obsidian，並建立「開工 / 收工 / 新專案初始化」工作流程。本版本已重新加回了 Obsidian MCPVault 的一鍵整合設定與專屬 Skill。
-
-本文件只放可公開教學的設定流程，不放任何個人 NotebookLM 清單、筆記本 ID、研究報告、生成圖片、帳號 token 或測試專案。
+這份懶人包旨在引導 Anti-Gravity 用戶與 AI 協同工作時，安全、順暢地連接 NotebookLM、Firebase、GitHub、Obsidian，並實施開工、收工與專案初始化的標準作業。此版本基於實戰測試，針對 Windows 環境的權限問題與 AI 執行限制進行了優化。
 
 ---
 
-## 先備條件
+## 🛠️ 一、基礎開發環境與 Windows 特殊處理
 
-- [ ] 已安裝 Anti-Gravity 或可使用 MCP 的 AI 編碼助理
-- [ ] 已安裝 Git
-- [ ] 已安裝 GitHub CLI（`gh`）
-- [ ] 已安裝 Node.js / npm
-- [ ] 已安裝 Python 或 `uv`
-- [ ] 有 Google 帳號，可登入 NotebookLM / Firebase
-- [ ] 有 GitHub 帳號
-- [ ] 已有 Obsidian vault，或知道筆記本資料夾位置
+在 Windows 環境中，為避免 PowerShell 執行原則（Execution Policy）阻擋 `.ps1` 腳本（例如直接執行 `npm` 或 `npx` 失敗），請遵循以下規範：
 
-Windows 快速檢查：
+### 1. 指令替代方案
+*   **不要直接執行** `npm` 或 `npx`。
+*   **務必改用** `npm.cmd` 與 `npx.cmd` 來繞過權限阻擋。
 
+### 2. 環境檢測指令
 ```powershell
 git --version
 gh --version
 node --version
 npm.cmd --version
-python --version
+uv --version
 ```
+*提示：若缺乏 `uv` 或 `node`，建議使用 `winget install astral-sh.uv` 或 `winget install OpenJS.NodeJS.LTS` 快速安裝。*
 
 ---
 
-## 一、連接 NotebookLM
+## 📂 二、各項服務連接指引
 
-### 重點原則
-
-NotebookLM 登入應走瀏覽器 OAuth 授權。不要複製 cookie、token，也不要把 NotebookLM 匯出的 `notebooks.json` 或筆記本 ID 清單放進公開 repo。
-
-### 安裝 NotebookLM MCP CLI
-
-建議優先用 `uv` 安裝：
-
-```powershell
-uv tool install notebooklm-mcp-cli
-nlm --version
-```
-
-如果沒有 `uv`，再用 pip：
-
-```powershell
-pip install notebooklm-mcp-cli
-nlm --version
-```
-
-### 重新登入 Google 帳號
-
-若曾經登入錯帳號，先登出再重新 OAuth：
-
-```powershell
-nlm logout
-nlm login
-```
-
-`nlm login` 會開啟瀏覽器，請在瀏覽器選擇正確的 Google 帳號完成授權。
-
-驗證：
-
-```powershell
-nlm doctor
-nlm list
-```
-
-如果 Windows 顯示 CP950 / Unicode 編碼錯誤，可在同一個 PowerShell 視窗先設定：
-
-```powershell
-$env:PYTHONIOENCODING = "utf-8"
-nlm doctor
-```
-
-### 註冊 MCP
-
-Anti-Gravity 的 MCP 設定檔位置請以實際產品文件或 UI 為準。不要直接套用 OpenCode 的 `opencode.json`，除非 Anti-Gravity 明確使用同一個設定檔。
-
-通用設定概念：
-
-```json
-{
-  "mcp": {
+### 1. NotebookLM MCP 連接
+*   **安裝指令**（建議使用 `uv`，速度最快且不污染全域環境）：
+    ```powershell
+    uv tool install notebooklm-mcp-cli
+    ```
+*   **登入驗證**：
+    ```powershell
+    # 請確保在可調用系統瀏覽器的環境下執行，這會啟動 Chrome 完成 Google OAuth 登入
+    $env:PATH = "C:\Users\wzw11\.local\bin;" + $env:PATH
+    nlm login
+    ```
+*   **驗證與檢查**：
+    ```powershell
+    nlm doctor
+    nlm list notebooks
+    ```
+*   **MCP 註冊設定**：
+    ```json
     "notebooklm": {
       "type": "local",
       "command": ["nlm", "mcp"],
       "enabled": true
     }
-  }
-}
-```
+    ```
 
-完成後重啟 Anti-Gravity，請它列出 NotebookLM 筆記本。只回報是否成功，不要把完整清單 commit 到 repo。
-
----
-
-## 二、連接 GitHub
-
-### 登入 GitHub CLI
-
-```powershell
-gh auth status
-gh auth login --web --git-protocol https
-gh auth status
-```
-
-若登入流程卡住，請在可互動的 PowerShell 視窗完成瀏覽器授權，再回來驗證。
-
-### 設定 Git 使用者
-
-```powershell
-git config --global user.name "你的名字"
-git config --global user.email "your-email@example.com"
-```
-
-若不想公開個人信箱，可使用 GitHub no-reply email。
-
-### 安全規則
-
-- GitHub 與 GitHub Copilot 是不同服務；本流程只需要 GitHub 帳號、Git、GitHub CLI。
-- 不把 GitHub token 寫進 Markdown、AGENTS、ANTIGRAVITY、Obsidian 對外筆記或 repo。
-- commit 前先檢查 diff，不要無差別提交。
-
----
-
-## 三、連接 Firebase
-
-### 安裝與登入
-
-Windows 建議使用 `npx.cmd`，避免 PowerShell 執行原則擋到 `.ps1`：
-
-```powershell
-npx.cmd -y firebase-tools@latest --version
-npx.cmd -y firebase-tools@latest login
-npx.cmd -y firebase-tools@latest projects:list
-```
-
-`firebase login` 需要互動式瀏覽器登入。如果在 AI 對話裡卡住，請手動開 PowerShell 執行登入，再回來讓 AI 驗證。
-
-### 註冊 Firebase MCP
-
-Anti-Gravity 的 MCP 設定檔位置請以實際產品文件或 UI 為準。設定概念如下：
-
-```json
-{
-  "mcp": {
+### 2. Firebase 連接
+*   **環境與版本確認**：
+    ```powershell
+    npx.cmd -y firebase-tools@latest --version
+    ```
+*   **登入驗證（⚠️ 重要限制）**：
+    *   **限制**：AI 的背景執行環境為非互動式（non-interactive），直接執行 `firebase login` 會報錯失敗。
+    *   **手動步驟**：使用者**必須手動在自己的實體 PowerShell 視窗中執行** `npx firebase-tools login` 來完成 Google 授權，AI 之後方可接手。
+*   **MCP 註冊設定**：
+    ```json
     "firebase": {
       "type": "local",
       "command": ["npx.cmd", "-y", "firebase-tools@latest", "mcp"],
       "enabled": true
     }
-  }
-}
-```
+    ```
 
-完成後重啟 Anti-Gravity，測試列出 Firebase 專案與 Firestore 集合。
+### 3. GitHub & Git 設定
+*   **GitHub CLI 登入**：
+    ```powershell
+    gh auth login --web --git-protocol https
+    ```
+    *如果在背景執行，AI 會輸出單次驗證碼（One-time code），使用者需前往 https://github.com/login/device 輸入授權。*
+*   **Git 全域使用者設定（防錯必做）**：
+    為了防止 Git Commit 時因身分未知而中斷，請確實設定使用者名稱與信箱：
+    ```powershell
+    git config --global user.name "您的GitHub帳號名稱"
+    git config --global user.email "您的GitHub電子郵件"
+    ```
 
-### 安全規則
-
-- Firebase 前端 config 可公開，但 Admin SDK 憑證不可公開。
-- `.firebaserc` 若含私人專案 ID，公開前請確認是否適合。
-- 學生資料只存班級代號與座號，不存真名。
-
----
-
-## 四、連接 Obsidian
-
-### 找到 vault
-
-請先確認 Obsidian vault 的實體路徑。常見位置：
-
-```text
-C:\Users\<你>\OneDrive\文件\Secondbrain
-C:\Users\<你>\Documents\<vault 名稱>
-G:\我的雲端硬碟\<vault 名稱>
-```
-
-確認條件：
-
-- 資料夾存在
-- 裡面有 `.obsidian`
-- 是你平常真正使用的那個 vault
-
-### 安裝 MCPVault
-
-```powershell
-npm.cmd install -g @bitbonsai/mcpvault
-where.exe mcpvault
-```
-
-常見路徑：
-
-```text
-C:\Users\<你>\AppData\Roaming\npm\mcpvault.cmd
-```
-
-### 註冊 Obsidian MCP
-
-不要把 OpenCode 的 `opencode.json` 當成 Anti-Gravity 固定格式。請依 Anti-Gravity 實際 MCP 設定方式加入：
-
-```json
-{
-  "mcp": {
+### 4. Obsidian MCPVault 連接
+*   **安裝 MCPVault**：
+    ```powershell
+    npm.cmd install -g @bitbonsai/mcpvault
+    ```
+*   **註冊與路徑確認**：
+    由於 AI 無法自動猜測您的資料夾位置，請手動確認 Vault 根目錄（需包含 `.obsidian` 資料夾）。
+*   **MCP 註冊設定**（請將路徑替換為您的實際路徑）：
+    ```json
     "obsidian": {
       "type": "local",
       "command": [
-        "C:\\Users\\<你>\\AppData\\Roaming\\npm\\mcpvault.cmd",
-        "C:\\Users\\<你>\\OneDrive\\文件\\Secondbrain"
+        "C:\\Users\\<您的用戶名>\\AppData\\Roaming\\npm\\mcpvault.cmd",
+        "C:\\Users\\<您的用戶名>\\Documents\\<您的Vault名稱>"
       ],
       "enabled": true
     }
-  }
-}
-```
-
-如果 Anti-Gravity 使用 command / args 分開的格式，概念如下：
-
-```json
-{
-  "command": "C:\\Users\\<你>\\AppData\\Roaming\\npm\\mcpvault.cmd",
-  "args": ["C:\\Users\\<你>\\OneDrive\\文件\\Secondbrain"]
-}
-```
-
-完成後重啟 Anti-Gravity，先測讀取 vault 根目錄，再測建立一篇測試筆記，最後讀回確認。
+    ```
 
 ---
 
-## 五、生圖
+## 🎨 三、AI 內建生圖技能整合
 
-如果 Anti-Gravity 內建生圖工具，可直接用自然語言產生圖片，不需要把 OpenAI API key 寫進 repo。
+**不要**在專案中保存任何 OpenAI 等外部生圖 API 金鑰。Anti-Gravity 具備強大的內建生圖工具，請直接以自然語言命令 AI 進行圖像生成與後製。
 
-建議提示格式：
+### 1. AI 內建生圖指令範本
+當需要產生圖片時，請直接在對話中呼叫：
+> **「幫我生成一張圖片，主題是：[主題]，用途是：[用途]，色彩風格為：[風格]，比例為：[16:9 / 1:1]，並儲存至專案的 assets/ 目錄。」**
 
-```text
-生成一張圖片：
-用途：
-尺寸比例：
-主題：
-畫面內容：
-風格：
-色彩：
-文字：
-限制：
-輸出位置：
-```
-
-注意：
-
-- 重要中文文字建議後製，生圖模型可能出字錯誤。
-- 專案要引用的圖片請放在專案 `assets/` 或 Obsidian 附件資料夾。
-- 不要把臨時生成圖全部 commit 到懶人包 repo。
+### 2. 生圖管理規範
+*   所有的生成圖片均需存放在專案專屬的 `assets/` 目錄或 Obsidian 附件夾中。
+*   避免將臨時生成的草圖、測試圖提交（Commit）至公開的代碼庫。
 
 ---
 
-## 六、開工 / 收工 / 新專案初始化
+## 🔄 四、開工 / 收工與專案初始化技能
 
-Anti-Gravity 可使用專案根目錄的 `ANTIGRAVITY.md` 作為 AI 工作規則入口。它應記錄固定規則、路徑、專案邊界與 Do / Don't；進度、踩坑、每日紀錄應放 Obsidian 專案駕駛艙。
+為了維持 AI 的記憶連貫並節省 Token 消耗，請嚴格遵守「開工、收工與初始化」SOP。
 
-### 開工
+### 1. 開工 (Start Work)
+當對對話發起「開工」時，AI 將執行以下動作：
+1.  讀取專案根目錄的 `ANTIGRAVITY.md` 規則檔案。
+2.  讀取 Obsidian 中的專案駕駛艙。
+3.  執行 `git status` 與最近變更檢查。
+4.  摘要當前進度，並向使用者回報下一步建議。
 
-使用者說「開工」時，AI 應：
+### 2. 收工 (Finish Work)
+當對對話發起「收工」時，AI 將執行以下動作：
+1.  **安全檢查**：自動掃描並排除 API Keys、個人憑證與敏感資料。
+2.  **更新記錄**：將本日完成事項、未完成事項與下一步規劃寫入 Obsidian 駕駛艙。
+3.  **藍圖更新**：若專案邊界或設定有變動，更新 `ANTIGRAVITY.md`。
+4.  **代碼提交**：執行 `git diff` 審查，僅 stage 本次相關變更，禁止使用 `git add .` 無差別提交，隨後 Commit 並 Push 至遠端儲存庫。
 
-1. 讀取專案根目錄的 `ANTIGRAVITY.md` 或同等規則檔。
-2. 讀取 Obsidian 專案駕駛艙。
-3. 執行 `git status` 與最近 commit 檢查。
-4. 回報目前狀態與建議下一步。
-5. 不自動 pull、commit 或 push。
-
-### 收工
-
-使用者說「收工」時，AI 應：
-
-1. 檢查是否有敏感資料：API key、token、憑證、NotebookLM 匯出清單、學生真名。
-2. 更新 Obsidian 專案駕駛艙：完成事項、下一步、踩坑。
-3. 只有固定規則或路徑改變時才更新 `ANTIGRAVITY.md`。
-4. 執行 `git status` 與 diff 檢查。
-5. 只 stage 本次相關檔案，不使用無差別 `git add .`。
-6. 產生 commit message，確認後 commit / push。
-7. 回報 Obsidian、規則檔與 GitHub 同步結果。
-
-### 新專案初始化
-
-使用者說「新專案初始化」時，AI 應先問清楚：
-
-- 專案名稱
-- 用途
-- 工作資料夾
-- 是否建立 GitHub repo
-- repo 公開或私有
-- 是否需要 GitHub Pages / Firebase / 其他部署
-- Obsidian vault 與專案駕駛艙位置
-
-接著建立或補齊：
-
-- `ANTIGRAVITY.md`
-- `README.md`
-- `.gitignore`
-- Git repo
-- GitHub repo（使用者需要時）
-- Obsidian 專案駕駛艙
-
-如果資料夾已經是既有專案，先盤點「已存在 / 缺少」清單，只補缺口，不覆蓋既有設定。
+### 3. 專案初始化
+當發起「新專案初始化」時，AI 應主動引導使用者提供：專案名稱、用途、工作目錄與是否建立 GitHub 庫，並為其自動生成 `.gitignore`、`README.md`、`ANTIGRAVITY.md` 與 Git 初始化設定。
 
 ---
 
-## 建議的 ANTIGRAVITY.md 範本
+## 📝 五、ANTIGRAVITY.md 藍圖範本
 
+請於專案根目錄建立 `ANTIGRAVITY.md`：
 ```markdown
 # <專案名稱> - ANTIGRAVITY.md
 
 ## 專案入口
-
-專案名稱：
-專案用途：
-主要工作目錄：
-GitHub repo：
-預設 branch：
+- 專案用途：
+- 主要工作目錄：
+- GitHub Repo: 
+- 預設 Branch: main
 
 ## Obsidian 對應筆記
+- 專案駕駛艙路徑：
 
-Obsidian vault：
-專案駕駛艙：
-
-## 工作規則
-
-- 回應使用繁體中文。
-- 涉及檔案操作時回報完整產出位置。
-- 使用 PowerShell 語法。
-- 開工時讀本檔、讀 Obsidian 駕駛艙、檢查 Git 狀態。
-- 收工時更新 Obsidian，必要時更新本檔，檢查 diff 後只提交相關檔案。
-- 不把每日流水帳寫進本檔。
-
-## 不要做
-
-- 不要 commit API key、token、密碼、Firebase Admin 憑證。
-- 不要 commit NotebookLM 個人匯出清單或筆記本 ID 清單。
-- 不要自動納入無關 git 變更。
-- 不要儲存學生真名；正式資料只用班級代號與座號。
+## 本地工作規則
+- 回應預設使用繁體中文 (Taiwan)。
+- 涉及檔案操作時必回報完整路徑。
+- Windows 指令改用 `*.cmd`。
+- 開工時讀取本檔與駕駛艙，收工時更新駕駛艙並清理敏感資料後提交。
+- 不得自動 commit 無關檔案。
 ```
-
----
-
-## 完成回報格式
-
-```markdown
-## Anti-Gravity 懶人包設定完成
-
-- NotebookLM：已登入 / 待 OAuth / 失敗
-- GitHub：已登入 / 待登入 / 失敗
-- Firebase：已登入 / 待登入 / 未使用
-- Obsidian：已連接 / 待設定 / 失敗
-- 規則檔：ANTIGRAVITY.md 已建立 / 已更新 / 未建立
-- Git 狀態：乾淨 / 有未提交變更
-- 下一步：
-```
-
----
-
-## 常見問題
-
-| 問題 | 解法 |
-|---|---|
-| NotebookLM 登入到錯帳號 | `nlm logout` 後重新 `nlm login`，在瀏覽器選正確帳號 |
-| `nlm doctor` 顯示未認證 | 重跑 OAuth 登入，不要手動貼 cookie |
-| Windows 顯示編碼錯誤 | 設定 `$env:PYTHONIOENCODING = "utf-8"` 後重試 |
-| GitHub CLI 未登入 | `gh auth login --web --git-protocol https` |
-| Firebase login 卡住 | 在互動式 PowerShell 手動跑 `npx.cmd -y firebase-tools@latest login` |
-| PowerShell 擋 `npm.ps1` / `npx.ps1` | 改用 `npm.cmd` / `npx.cmd` |
-| Obsidian 找不到 vault | 搜尋含 `.obsidian` 的資料夾，請使用者確認真正使用的 vault |
-| 收工會納入太多檔案 | 先看 `git status` 與 diff，只 stage 本次相關檔案 |
-
----
-
-## 更新紀錄
-
-| 日期 | 版本 | 更新內容 |
-|---|---|---|
-| 2026-05-31 | v1.4 | 重新加回 Obsidian MCPVault 設定與開工/收工自動化流程，並加入獨立 Skill 目錄 |
-| 2026-05-24 | v1.2 | 移除 Obsidian MCPVault 安裝與 MCP 註冊，保留 Obsidian 作為人工專案筆記工作流 |
-| 2026-05-23 | v1.1 | 移除 NotebookLM 個人資料與成果檔定位，改正 NotebookLM OAuth、Obsidian MCP、Git 收工安全流程 |
-| 2026-05-22 | v1.0 | 初版 |
